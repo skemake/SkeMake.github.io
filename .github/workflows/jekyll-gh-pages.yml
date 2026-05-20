@@ -35,6 +35,48 @@ jobs:
         with:
           source: ./
           destination: ./_site
+      - name: Fix permissions for generated site
+        run: |
+          sudo chown -R "$USER:$USER" _site
+          chmod -R u+rwX _site
+
+      - name: Install QR generator
+        run: npm install -g qrcode
+
+      - name: Generate one QR code per HTML page
+        env:
+          SITE_BASE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+        run: |
+          find _site -type f -name '*.html' | while read -r html; do
+            rel="${html#_site/}"
+
+            if [ "$rel" = "index.html" ]; then
+              url="${SITE_BASE_URL}/"
+              qr="_site/index.qr.svg"
+            else
+              url="${SITE_BASE_URL}/${rel}"
+              qr="${html%.html}.qr.svg"
+            fi
+
+            echo "QR: $url -> $qr"
+            qrcode -o "$qr" "$url"
+          done
+
+      - name: Insert QR image into each HTML page
+        run: |
+          find _site -type f -name '*.html' | while read -r html; do
+            file="$(basename "$html")"
+            base="${file%.html}"
+
+            if [ "$file" = "index.html" ]; then
+              qr="index.qr.svg"
+            else
+              qr="${base}.qr.svg"
+            fi
+
+            sed -i "s#</body>#<hr><p><img src=\"$qr\" alt=\"QR-kod för denna sida\" width=\"180\" height=\"180\"></p></body>#" "$html"
+          done
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
 
