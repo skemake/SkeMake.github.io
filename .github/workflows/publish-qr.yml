@@ -1,0 +1,82 @@
+name: Build and deploy Pages with QR codes
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Build with Jekyll
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./
+          destination: ./_site
+
+      - name: Install QR generator
+        run: npm install -g qrcode
+
+      - name: Generate one QR code per HTML page
+        env:
+          SITE_BASE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+        run: |
+          find _site -type f -name '*.html' | while read -r html; do
+            rel="${html#_site/}"
+
+            if [ "$rel" = "index.html" ]; then
+              url="${SITE_BASE_URL}/"
+              qr="_site/index.qr.svg"
+            else
+              url="${SITE_BASE_URL}/${rel}"
+              qr="${html%.html}.qr.svg"
+            fi
+
+            echo "QR: $url -> $qr"
+            qrcode -o "$qr" "$url"
+          done
+
+      - name: Insert QR image into each HTML page
+        run: |
+          find _site -type f -name '*.html' | while read -r html; do
+            file="$(basename "$html")"
+            base="${file%.html}"
+
+            if [ "$file" = "index.html" ]; then
+              qr="index.qr.svg"
+            else
+              qr="${base}.qr.svg"
+            fi
+
+            sed -i "s#</body>#<hr><p><img src=\"$qr\" alt=\"QR-kod för denna sida\" width=\"180\" height=\"180\"></p></body>#" "$html"
+          done
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./_site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
