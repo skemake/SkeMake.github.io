@@ -45,11 +45,11 @@ jobs:
 
       - name: Generate one QR code per HTML page
         env:
-          SITE_BASE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+          SITE_BASE_URL: https://pages.skemake.se/
         run: |
-          find _site -type f -name '*.html' | while read -r html; do
+          find _site -type f -name '*.html' -print0 | while IFS= read -r -d '' html; do
             rel="${html#_site/}"
-
+            echo "$html -> $rel"
             if [ "$rel" = "index.html" ]; then
               url="${SITE_BASE_URL}/"
               qr="_site/index.qr.svg"
@@ -59,12 +59,12 @@ jobs:
             fi
 
             echo "QR: $url -> $qr"
-            qrcode -o "$qr" "$url"
+            qrcode -o "$qr" "$url" < /dev/null
           done
 
       - name: Insert QR image into each HTML page
         run: |
-          find _site -type f -name '*.html' | while read -r html; do
+          find _site -type f -name '*.html' -print0 | while IFS= read -r -d '' html; do
             file="$(basename "$html")"
             base="${file%.html}"
 
