@@ -1,62 +1,151 @@
-# Sample workflow for building and deploying a Jekyll site to GitHub Pages
-name: Deploy Jekyll with GitHub Pages dependencies preinstalled
+# Builds the site with Jekyll and deploys it to GitHub Pages.
+#
+# main is published at https://pages.skemake.se/ and every other branch at
+# https://pages.skemake.se/preview/<branch>/, where <branch> is the branch name
+# in lower case with everything except a-z and 0-9 replaced by "-"
+# (feature/Ny_sida -> preview/feature-ny-sida/). Dependabot branches are skipped.
+#
+# GitHub Pages only allows deploys from main (the github-pages environment), and
+# every deploy replaces the whole site. So deploys always run on main and build
+# all branches; a push to any other branch just asks main to deploy again.
+name: Deploy Jekyll site with branch previews
 
 on:
-  # Runs on pushes targeting the default branch
   push:
-    branches: ["main"]
+    branches-ignore: ["dependabot/**"]
+
+  # Rebuild when a branch is deleted, so its preview disappears.
+  # (This event always runs the workflow on main.)
+  delete:
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
-# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
-# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
+# Only one deploy at a time. Do NOT cancel a deploy in progress; a newer queued
+# deploy replaces an older queued one. Runs on other branches only request a
+# deploy, so they get their own group and never replace a queued deploy.
 concurrency:
-  group: "pages"
+  group: ${{ github.ref == 'refs/heads/main' && 'pages' || format('pages-request-{0}', github.run_id) }}
   cancel-in-progress: false
 
 jobs:
-  # Build job
-  build:
+  # Push to another branch than main: start this workflow on main instead.
+  request-deploy:
+    if: github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Run deploy on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          workflow="${GITHUB_WORKFLOW_REF%@*}"
+          gh workflow run "${workflow##*/}" --repo "$GITHUB_REPOSITORY" --ref main
+
+  # What to build: main at the root and every other branch as a preview.
+  branches:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.list.outputs.matrix }}
+    steps:
+      - name: List branches
+        id: list
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          matrix=$(gh api --paginate "repos/$GITHUB_REPOSITORY/branches" --jq '.[].name' | jq -R -s -c '
+            split("\n")
+            | map(select(. != "" and . != "main" and (startswith("dependabot/") | not)))
+            | map({branch: ., path: ("preview/" + (ascii_downcase | gsub("[^a-z0-9]+"; "-") | gsub("^-|-$"; "")))})
+            | [{branch: "main", path: ""}] + .')
+          echo "$matrix" | jq .
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.branch }}
+    needs: branches
+    runs-on: ubuntu-latest
+    strategy:
+      # A branch that fails to build only loses its own preview.
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.branches.outputs.matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-      - name: Setup Pages
-        uses: actions/configure-pages@v6
+        with:
+          ref: ${{ matrix.branch }}
+
+      - name: Set base URL for preview
+        if: matrix.path != ''
+        env:
+          PREVIEW_PATH: ${{ matrix.path }}
+        run: |
+          printf '\nbaseurl: "/%s"\n' "$PREVIEW_PATH" >> _config.yml
+
       - name: Build with Jekyll
         uses: actions/jekyll-build-pages@v1
         with:
           source: ./
-          destination: ./_site
-      - name: Fix permissions for generated site
+          destination: ./_site/${{ matrix.path }}
+
+      - name: Upload built branch
+        uses: actions/upload-artifact@v7
+        with:
+          name: site-${{ strategy.job-index }}
+          path: _site/
+          if-no-files-found: error
+          retention-days: 1
+
+  # Put all branches together, add QR codes and package the site.
+  assemble:
+    needs: [branches, build]
+    # Deploy even if a preview failed to build, as long as main was built.
+    if: ${{ !cancelled() && needs.branches.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - name: Setup Pages
+        uses: actions/configure-pages@v6
+
+      - name: Download built branches
+        uses: actions/download-artifact@v8
+        with:
+          pattern: site-*
+          merge-multiple: true
+          path: _site
+
+      - name: Check that main was built
+        run: test -f _site/index.html
+
+      - name: Keep previews out of search engines
         run: |
-          sudo chown -R "$USER:$USER" _site
-          chmod -R u+rwX _site
+          if [ -d _site/preview ]; then
+            find _site/preview -type f -name '*.html' \
+              -exec sed -i 's#<head>#<head><meta name="robots" content="noindex">#' {} +
+          fi
 
       - name: Install QR generator
         run: npm install -g qrcode
 
       - name: Generate one QR code per HTML page
         env:
-          SITE_BASE_URL: https://pages.skemake.se/
+          SITE_BASE_URL: https://pages.skemake.se
         run: |
           find _site -type f -name '*.html' -print0 | while IFS= read -r -d '' html; do
             rel="${html#_site/}"
-            echo "$html -> $rel"
-            if [ "$rel" = "index.html" ]; then
-              url="${SITE_BASE_URL}/"
-              qr="_site/index.qr.svg"
-            else
-              url="${SITE_BASE_URL}/${rel}"
-              qr="${html%.html}.qr.svg"
-            fi
+            case "$rel" in
+              index.html|*/index.html) url="${SITE_BASE_URL}/${rel%index.html}" ;;
+              *) url="${SITE_BASE_URL}/${rel}" ;;
+            esac
+            qr="${html%.html}.qr.svg"
 
             echo "QR: $url -> $qr"
             qrcode -o "$qr" "$url" < /dev/null
@@ -66,13 +155,7 @@ jobs:
         run: |
           find _site -type f -name '*.html' -print0 | while IFS= read -r -d '' html; do
             file="$(basename "$html")"
-            base="${file%.html}"
-
-            if [ "$file" = "index.html" ]; then
-              qr="index.qr.svg"
-            else
-              qr="${base}.qr.svg"
-            fi
+            qr="${file%.html}.qr.svg"
 
             sed -i "s#</body>#<hr><p><img src=\"$qr\" alt=\"QR-kod för denna sida\" width=\"180\" height=\"180\"></p></body>#" "$html"
           done
@@ -80,13 +163,16 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
 
-  # Deployment job
   deploy:
+    needs: assemble
+    if: ${{ !cancelled() && needs.assemble.result == 'success' }}
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    needs: build
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
