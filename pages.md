@@ -1,3 +1,7 @@
+---
+# Visas inte på startsidan, länkas från introtexten i stället.
+hidden: true
+---
 # Skapa dokumentation
 
 Den här guiden förklara hur man föreslår förändringar i SkeMakes dokumentation. Den kräver ingen kunskap i programmering, och de enkla ändringarna görs direkt på GitHub.

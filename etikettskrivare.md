@@ -1,3 +1,7 @@
+---
+description: Skriv ut etiketter med text och bilder från webbläsaren
+image: /images/etikettskrivare.jpg
+---
 Etikettskrivare
 ===
 ![Bild på etikettskrivaren](./images/etikettskrivare.jpg)
