@@ -1,0 +1,16 @@
+{
+  "name": "SkeMake Pages (Jekyll)",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "workspaceMount": "source=${localWorkspaceFolder},target=/srv/jekyll,type=bind",
+  "workspaceFolder": "/srv/jekyll",
+  "remoteUser": "jekyll",
+  "forwardPorts": [4000, 35729],
+  "portsAttributes": {
+    "4000": { "label": "Jekyll", "onAutoForward": "openBrowser" },
+    "35729": { "label": "LiveReload", "onAutoForward": "silent" }
+  },
+  "postAttachCommand": "serve-site"
+}

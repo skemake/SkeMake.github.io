@@ -1,0 +1,15 @@
+# Local preview without VS Code:
+#
+#   docker compose -f .devcontainer/compose.yaml up
+#
+# then open http://localhost:4000. Run with --build after changing the Gemfile.
+services:
+  jekyll:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    ports:
+      - "4000:4000"
+      - "35729:35729"
+    volumes:
+      - ..:/srv/jekyll:ro

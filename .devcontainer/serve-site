@@ -1,0 +1,10 @@
+#!/bin/sh
+# Serve the site on http://localhost:4000 and reload the browser on changes.
+# The built site goes to /tmp inside the container, so nothing is written to
+# the repo. --source is needed because _config.yml sets `source: /`.
+exec bundle exec jekyll serve \
+  --source /srv/jekyll \
+  --destination /tmp/_site \
+  --host 0.0.0.0 \
+  --livereload \
+  "$@"

@@ -1,0 +1,69 @@
+---
+---
+
+@import "jekyll-theme-cayman";
+
+// Kort på startsidan (index.md)
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0 2rem;
+}
+
+.card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: .75rem;
+  border: 1px solid $border-color;
+  border-radius: .5rem;
+  color: inherit;
+  transition: border-color .15s, box-shadow .15s;
+
+  &:hover,
+  &:focus-visible {
+    border-color: $section-headings-color;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .08);
+    text-decoration: none;
+  }
+}
+
+.card-thumb {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 4.5rem;
+  height: 4.5rem;
+  overflow: hidden;
+  border-radius: .375rem;
+  background-image: linear-gradient(120deg, $header-bg-color-secondary, $header-bg-color);
+  color: $header-heading-color;
+  font-size: 1.75rem;
+  font-weight: 700;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.card-body {
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+  min-width: 0;
+
+  strong {
+    color: $body-link-color;
+    font-size: 1.1rem;
+  }
+
+  span {
+    color: $body-text-color;
+    font-size: .9rem;
+    line-height: 1.4;
+  }
+}

@@ -1,3 +1,6 @@
+---
+description: 3D-skrivare – uppstart och slicerprofil
+---
 Snapmaker 2.0 A350
 ==================
 
